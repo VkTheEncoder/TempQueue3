@@ -1,3 +1,4 @@
+
 import os
 
 class Config:
@@ -8,5 +9,7 @@ class Config:
 
     #comma seperated user id of users who are allowed to use
     ALLOWED_USERS = [x.strip(' ') for x in os.environ.get('ALLOWED_USERS','1423807625,1048110820,6520490787,7100701721,7297547385').split(',')]
-
+ # Absolute path to the folder where you keep your .ttf/.otf files
+    FONTS_DIR = os.path.join(os.getcwd(), "fonts")
+    
     DOWNLOAD_DIR = 'downloads'
