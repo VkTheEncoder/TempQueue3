@@ -102,7 +102,7 @@ async def hardmux_vid(vid_filename: str, sub_filename: str, msg):
 
     vid_path = os.path.join(Config.DOWNLOAD_DIR, vid_filename)
     sub_path = os.path.join(Config.DOWNLOAD_DIR, sub_filename)
-    vf = [f"subtitles={sub_path}"]
+    vf = [f"subtitles={sub_path}:fontsdir={Config.FONTS_DIR}"]
     if res!='original': vf.append(f"scale={res}")
     if fps!='original': vf.append(f"fps={fps}")
     vf_arg = ",".join(vf)
