@@ -197,6 +197,44 @@ async def queue_worker(client: Client):
                 try:
                     os.remove(os.path.join(Config.DOWNLOAD_DIR, fn))
                 except:
+    async def maybe_capture_name(client, message):
+    chat_id = message.from_user.id
+    if chat_id not in _PENDING_RENAME:
+        return  # ignore unrelated messages
+
+    pending = _PENDING_RENAME.pop(chat_id)
+    user_text = (message.text or '').strip()
+
+    final_name = pending['default_name']
+    if user_text and user_text.lower() not in ('default', '/skip'):
+        # ensure extension exists
+        root, ext = os.path.splitext(user_text)
+        if not ext:
+            # inherit ext from default
+            _, ext0 = os.path.splitext(final_name)
+            final_name = user_text + ext0
+        else:
+            final_name = user_text
+
+    # Create job (same shape as before)
+    job_id = uuid.uuid4().hex[:8]
+    status = await client.send_message(
+        chat_id,
+        f"🔄 Job <code>{job_id}</code> enqueued at position {job_queue.qsize() + 1}",
+        parse_mode=ParseMode.HTML
+    )
+
+    await job_queue.put(Job(
+        job_id,
+        pending['mode'],
+        chat_id,
+        pending['vid'],
+        pending['sub'],
+        final_name,
+        status
+    ))
+    # clear DB so they can queue again
+    db.erase(chat_id)
                     pass
 
         # signal done, move to next
