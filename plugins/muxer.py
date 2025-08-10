@@ -145,7 +145,7 @@ async def queue_worker(client: Client):
             softmux_vid if job.mode == 'soft'
             else hardmux_vid if job.mode == 'hard'
             else nosub_encode
-        )(job.vid, job.sub, job.status_msg)
+        )(job.vid, job.status_msg)
 
         if out_file:
             # rename to the captured final_name
@@ -154,20 +154,13 @@ async def queue_worker(client: Client):
             os.rename(src, dst)
 
             # upload with progress bar (= live)
-            t0 = time.time()
-                await client.send_document(
-                    job.chat_id,
-                    document=dst,
-                    caption=job.final_name,
-                    progress=progress_bar,
-                    progress_args=('Uploading…', job.status_msg, t0, job.job_id)
-                    
-                await client.send_video(
-                    job.chat_id,
-                    video=dst,
-                    caption=job.final_name,
-                    progress=progress_bar,
-                    progress_args=('Uploading…', job.status_msg, t0, job.job_id)
+            await client.send_document(
+                job.chat_id,
+                document=dst,
+                caption=job.final_name,
+                progress=progress_bar,
+                progress_args=('Uploading…', job.status_msg, t0, job.job_id)
+            )
     
 
             await job.status_msg.edit(
@@ -180,7 +173,17 @@ async def queue_worker(client: Client):
                 try:
                     os.remove(os.path.join(Config.DOWNLOAD_DIR, fn))
                 except:
-    async def maybe_capture_name(client, message):
+                    pass
+
+        # signal done, move to next
+        job_queue.task_done()
+
+
+# ------------------------------------------------------------------------------
+# capture rename replies
+# ------------------------------------------------------------------------------
+@Client.on_message(filters.text & check_user & filters.private)
+async def maybe_capture_name(client, message):
     chat_id = message.from_user.id
     if chat_id not in _PENDING_RENAME:
         return  # ignore unrelated messages
@@ -199,7 +202,7 @@ async def queue_worker(client: Client):
         else:
             final_name = user_text
 
-    # Create job (same shape as before)
+    # Create job
     job_id = uuid.uuid4().hex[:8]
     status = await client.send_message(
         chat_id,
@@ -216,9 +219,4 @@ async def queue_worker(client: Client):
         final_name,
         status
     ))
-    # clear DB so they can queue again
     db.erase(chat_id)
-                    pass
-
-        # signal done, move to next
-        job_queue.task_done()
