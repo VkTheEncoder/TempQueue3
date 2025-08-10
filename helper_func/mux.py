@@ -154,3 +154,75 @@ async def hardmux_vid(vid_filename: str, sub_filename: str, msg):
             parse_mode=ParseMode.HTML
         )
         return False
+async def nosub_encode(vid_filename: str, msg):
+    start    = time.time()
+    cfg      = SettingsManager.get(msg.chat.id)
+
+    res    = cfg.get('resolution','1920:1080')
+    fps    = cfg.get('fps','original')
+    codec  = cfg.get('codec','libx264')
+    crf    = cfg.get('crf','27')
+    preset = cfg.get('preset','faster')
+
+    vid_path = os.path.join(Config.DOWNLOAD_DIR, vid_filename)
+
+    vf = []
+    if res != 'original': vf.append(f"scale={res}")
+    if fps != 'original': vf.append(f"fps={fps}")
+    vf_args = []
+    if vf:
+        vf_args = ['-vf', ",".join(vf)]
+
+    base   = os.path.splitext(vid_filename)[0]
+    output = f"{base}_nosub.mp4"
+    out_path = os.path.join(Config.DOWNLOAD_DIR, output)
+
+    proc = await asyncio.create_subprocess_exec(
+        'ffmpeg','-hide_banner',
+        '-i', vid_path, *vf_args,
+        '-c:v', codec, '-preset', preset, '-crf', crf,
+        '-c:a', 'copy',
+        '-y', out_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+
+    job_id = uuid.uuid4().hex[:8]
+    running_jobs[job_id] = dict(proc=proc, msg=msg, out_path=out_path)
+
+    async for line in readlines(proc.stderr):
+        if not line:
+            await asyncio.sleep(0.3)
+            continue
+        prog = parse_progress(line.decode(errors='ignore'))
+        if not prog:
+            continue
+        try:
+            await msg.edit(
+                f"🔧 <b>Encoding</b> [<code>{job_id}</code>]\n"
+                f"• Size   : {prog.get('size','N/A')}\n"
+                f"• Time   : {prog.get('time','N/A')}\n"
+                f"• Speed  : {prog.get('speed','N/A')}",
+                parse_mode=ParseMode.HTML
+            )
+        except:
+            pass
+
+    rc = await proc.wait()
+    running_jobs.pop(job_id, None)
+
+    if rc == 0 and os.path.exists(out_path):
+        await msg.edit(
+            f"✅ No-Sub Encode `<code>{job_id}</code>` completed in {round(time.time()-start)}s",
+            parse_mode=ParseMode.HTML
+        )
+        await asyncio.sleep(2)
+        return output
+    else:
+        err = await proc.stderr.read()
+        await msg.edit(
+            "❌ Error during no-sub encode!\n\n"
+            f"<pre>{err.decode(errors='ignore')}</pre>",
+            parse_mode=ParseMode.HTML
+        )
+        return False
