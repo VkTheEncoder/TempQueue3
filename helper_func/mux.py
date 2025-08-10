@@ -154,6 +154,7 @@ async def hardmux_vid(vid_filename: str, sub_filename: str, msg):
             parse_mode=ParseMode.HTML
         )
         return False
+
 async def nosub_encode(vid_filename: str, msg):
     start    = time.time()
     cfg      = SettingsManager.get(msg.chat.id)
@@ -188,30 +189,21 @@ async def nosub_encode(vid_filename: str, msg):
     )
 
     job_id = uuid.uuid4().hex[:8]
-    running_jobs[job_id] = dict(proc=proc, msg=msg, out_path=out_path)
+    # parity with soft/hard: use stderr reader + waiter tasks so /cancel works uniformly
+    reader = asyncio.create_task(read_stderr(start, msg, proc, job_id))
+    waiter = asyncio.create_task(proc.wait())
+    running_jobs[job_id] = {'proc': proc, 'tasks': [reader, waiter]}
 
-    async for line in readlines(proc.stderr):
-        if not line:
-            await asyncio.sleep(0.3)
-            continue
-        prog = parse_progress(line.decode(errors='ignore'))
-        if not prog:
-            continue
-        try:
-            await msg.edit(
-                f"🔧 <b>Encoding</b> [<code>{job_id}</code>]\n"
-                f"• Size   : {prog.get('size','N/A')}\n"
-                f"• Time   : {prog.get('time','N/A')}\n"
-                f"• Speed  : {prog.get('speed','N/A')}",
-                parse_mode=ParseMode.HTML
-            )
-        except:
-            pass
+    await msg.edit(
+        f"🔄 No-Sub job started: <code>{job_id}</code>\n"
+        f"Send <code>/cancel {job_id}</code> to abort",
+        parse_mode=ParseMode.HTML
+    )
 
-    rc = await proc.wait()
+    await asyncio.wait([reader, waiter])
     running_jobs.pop(job_id, None)
 
-    if rc == 0 and os.path.exists(out_path):
+    if proc.returncode == 0 and os.path.exists(out_path):
         await msg.edit(
             f"✅ No-Sub Encode `<code>{job_id}</code>` completed in {round(time.time()-start)}s",
             parse_mode=ParseMode.HTML
