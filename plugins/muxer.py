@@ -3,7 +3,7 @@
 from pyrogram import Client, filters
 from pyrogram.enums import ParseMode
 from helper_func.queue import Job, job_queue
-from helper_func.mux   import softmux_vid, hardmux_vid, running_jobs
+from helper_func.mux   import softmux_vid, hardmux_vid, nosub_encode, running_jobs
 from helper_func.progress_bar import progress_bar
 from helper_func.dbhelper       import Database as Db
 from config import Config
@@ -23,7 +23,7 @@ async def _ask_for_name(client, chat_id, mode, vid, sub, default_name):
         chat_id,
         "✍️ Send the output file name **with extension** (or type `default` to keep it):\n\n"
         f"<code>{default_name}</code>",
-        parse_mode=ParseMode.MARKDOWN
+        parse_mode=ParseMode.HTML
     )
     _PENDING_RENAME[chat_id] = dict(
         mode=mode, vid=vid, sub=sub, default_name=default_name, status_msg=status
@@ -41,15 +41,6 @@ async def enqueue_soft(client, message):
         if not vid: text += 'First send a Video File\n'
         if not sub: text += 'Send a Subtitle File!'
         return await client.send_message(chat_id, text, parse_mode=ParseMode.HTML)
-
-    # capture everything now
-    final_name = db.get_filename(chat_id)
-    job_id     = uuid.uuid4().hex[:8]
-    status     = await client.send_message(
-        chat_id,
-        f"🔄 Job <code>{job_id}</code> enqueued at position {job_queue.qsize() + 1}",
-        parse_mode=ParseMode.HTML
-    )
 
     # enqueue & clear DB so user can queue again immediately
     default_final = db.get_filename(chat_id) or (os.path.splitext(vid)[0] + "_soft.mkv")
@@ -70,14 +61,6 @@ async def enqueue_hard(client, message):
         if not vid: text += 'First send a Video File\n'
         if not sub: text += 'Send a Subtitle File!'
         return await client.send_message(chat_id, text, parse_mode=ParseMode.HTML)
-
-    final_name = db.get_filename(chat_id)
-    job_id     = uuid.uuid4().hex[:8]
-    status     = await client.send_message(
-        chat_id,
-        f"🔄 Job <code>{job_id}</code> enqueued at position {job_queue.qsize() + 1}",
-        parse_mode=ParseMode.HTML
-    )
 
     default_final = db.get_filename(chat_id) or (os.path.splitext(vid)[0] + "_hard.mp4")
     await _ask_for_name(client, chat_id, 'hard', vid, sub, default_final)
@@ -136,7 +119,7 @@ async def cancel_job(client, message):
         )
 
     entry['proc'].kill()
-    for t in entry['tasks']:
+    for t in entry.get('tasks', []):
         t.cancel()
     running_jobs.pop(target, None)
 
