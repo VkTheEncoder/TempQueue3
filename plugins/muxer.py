@@ -10,13 +10,24 @@ from config import Config
 import uuid, time, os, asyncio
 
 db = Db()
+# Chat state: expecting a filename reply after picking a mode
+_PENDING_RENAME = {}  # chat_id -> dict(mode, vid, sub, default_name, status_msg)
 
 # only allow configured users
 async def _check_user(filt, client, message):
     return str(message.from_user.id) in Config.ALLOWED_USERS
 check_user = filters.create(_check_user)
 
-
+async def _ask_for_name(client, chat_id, mode, vid, sub, default_name):
+    status = await client.send_message(
+        chat_id,
+        "✍️ Send the output file name **with extension** (or type `default` to keep it):\n\n"
+        f"<code>{default_name}</code>",
+        parse_mode=ParseMode.MARKDOWN
+    )
+    _PENDING_RENAME[chat_id] = dict(
+        mode=mode, vid=vid, sub=sub, default_name=default_name, status_msg=status
+    )
 # ------------------------------------------------------------------------------
 # enqueue a soft-mux job
 # ------------------------------------------------------------------------------
@@ -69,6 +80,18 @@ async def enqueue_hard(client, message):
 
     await job_queue.put(Job(job_id, 'hard', chat_id, vid, sub, final_name, status))
     db.erase(chat_id)
+
+
+@Client.on_message(filters.command('nosub') & check_user & filters.private)
+async def enqueue_nosub(client, message):
+    chat_id = message.from_user.id
+    vid     = db.get_vid_filename(chat_id)
+    if not vid:
+        return await client.send_message(chat_id, "First send a Video File.", parse_mode=ParseMode.HTML)
+
+    # pick a sensible default name (use whatever you stored as original save_filename if present)
+    default_final = db.get_filename(chat_id) or (os.path.splitext(vid)[0] + "_nosub.mp4")
+    await _ask_for_name(client, chat_id, 'nosub', vid, None, default_final)
 
 
 # ------------------------------------------------------------------------------
