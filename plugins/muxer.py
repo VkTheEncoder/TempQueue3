@@ -172,22 +172,20 @@ async def queue_worker(client: Client):
 
             # upload with progress bar (= live)
             t0 = time.time()
-            if job.mode == 'soft':
                 await client.send_document(
                     job.chat_id,
                     document=dst,
                     caption=job.final_name,
                     progress=progress_bar,
                     progress_args=('Uploading…', job.status_msg, t0, job.job_id)
-                )
-            else:
+                    
                 await client.send_video(
                     job.chat_id,
                     video=dst,
                     caption=job.final_name,
                     progress=progress_bar,
                     progress_args=('Uploading…', job.status_msg, t0, job.job_id)
-                )
+    
 
             await job.status_msg.edit(
                 f"✅ Job <code>{job.job_id}</code> done in {round(time.time() - t0)}s",
