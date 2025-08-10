@@ -159,7 +159,9 @@ async def queue_worker(client: Client):
 
         # run ffmpeg (this will itself show live progress including job_id)
         out_file = await (
-            softmux_vid if job.mode == 'soft' else hardmux_vid
+            softmux_vid if job.mode == 'soft'
+            else hardmux_vid if job.mode == 'hard'
+            else nosub_encode
         )(job.vid, job.sub, job.status_msg)
 
         if out_file:
