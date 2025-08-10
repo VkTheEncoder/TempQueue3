@@ -156,9 +156,11 @@ async def save_video(client, message):
     
     db.put_video(chat_id, filename, save_filename)
     if db.check_sub(chat_id):
-        text = 'Video file downloaded successfully.\nChoose your desired muxing.\n[ /softmux , /hardmux ]'
-    else :
-        text = 'Video file downloaded successfully.\nNow send Subtitle file!'
+        text = 'Video file downloaded successfully.\nChoose your desired processing:\n[ /softmux , /hardmux , /nosub ]'
+    else:
+        text = ('Video file downloaded successfully.\n'
+                'Now send Subtitle file, or run No-Sub encode directly:\n[ /nosub ]\n'
+                'You can also wait and use: [ /softmux , /hardmux ] after sending subs.')
     await client.edit_message_text(
             text = text,
             chat_id = chat_id,
