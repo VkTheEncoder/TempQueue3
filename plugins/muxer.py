@@ -52,7 +52,8 @@ async def enqueue_soft(client, message):
     )
 
     # enqueue & clear DB so user can queue again immediately
-    await job_queue.put(Job(job_id, 'soft', chat_id, vid, sub, final_name, status))
+    default_final = db.get_filename(chat_id) or (os.path.splitext(vid)[0] + "_soft.mkv")
+    await _ask_for_name(client, chat_id, 'soft', vid, sub, default_final)
     db.erase(chat_id)
 
 
@@ -78,7 +79,8 @@ async def enqueue_hard(client, message):
         parse_mode=ParseMode.HTML
     )
 
-    await job_queue.put(Job(job_id, 'hard', chat_id, vid, sub, final_name, status))
+    default_final = db.get_filename(chat_id) or (os.path.splitext(vid)[0] + "_hard.mp4")
+    await _ask_for_name(client, chat_id, 'hard', vid, sub, default_final)
     db.erase(chat_id)
 
 
