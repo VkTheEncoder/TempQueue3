@@ -33,11 +33,14 @@ PRESETS = [
     ('slow','slow'),('slower','slower'),
     ('veryslow','veryslow'),
 ]
-# allow-list filter (same as other plugins)
-async def _check_user(filt, client, message):
-    # works for both messages and callback queries
-    from_user = getattr(message, "from_user", None) or getattr(getattr(message, "message", None), "from_user", None)
-    return from_user and (str(from_user.id) in Config.ALLOWED_USERS)
+
+async def _check_user(filt, client, update):
+    user = getattr(update, "from_user", None)
+    if user is None:
+        msg = getattr(update, "message", None)
+        if msg:
+            user = getattr(msg, "from_user", None)
+    return bool(user) and (str(user.id) in Config.ALLOWED_USERS)
 
 check_user = filters.create(_check_user)
 
