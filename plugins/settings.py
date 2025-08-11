@@ -34,6 +34,12 @@ PRESETS = [
     ('veryslow','veryslow'),
 ]
 
+def _is_crf_stage(filt, client, message):
+    uid = getattr(message.from_user, "id", None)
+    return uid is not None and _PENDING.get(uid) == "crf"
+
+is_crf_stage = filters.create(_is_crf_stage)
+
 async def _check_user(filt, client, update):
     user = getattr(update, "from_user", None)
     if user is None:
@@ -118,6 +124,7 @@ async def handle_settings_cb(client: Client, cq):
     filters.text
     & ~filters.command(["start","softmux","hardmux","nosub","cancel","settings"])
     & check_user
+    & is_crf_stage  
     & filters.private
 )
 async def handle_crf_text(client: Client, message):
