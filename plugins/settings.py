@@ -4,6 +4,7 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.enums import ParseMode
 from helper_func.settings_manager import SettingsManager
+from config import Config
 
 # in‑memory state for who’s currently in settings
 _PENDING = {}
@@ -32,6 +33,13 @@ PRESETS = [
     ('slow','slow'),('slower','slower'),
     ('veryslow','veryslow'),
 ]
+# allow-list filter (same as other plugins)
+async def _check_user(filt, client, message):
+    # works for both messages and callback queries
+    from_user = getattr(message, "from_user", None) or getattr(getattr(message, "message", None), "from_user", None)
+    return from_user and (str(from_user.id) in Config.ALLOWED_USERS)
+
+check_user = filters.create(_check_user)
 
 def _keyboard(options: list, tag: str) -> InlineKeyboardMarkup:
     """Build inline keyboard rows of one button each."""
