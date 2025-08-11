@@ -102,7 +102,13 @@ async def handle_settings_cb(client: Client, cq):
         _PENDING.pop(uid, None)
         await cq.edit_message_text(summary, parse_mode=ParseMode.HTML)
 
-@Client.on_message(filters.text & filters.private)
+
+@Client.on_message(
+    filters.text
+    & ~filters.command(["start","softmux","hardmux","nosub","cancel","settings"])
+    & check_user
+    & filters.private
+)
 async def handle_crf_text(client: Client, message):
     """Catch CRF numeric entry."""
     uid = message.from_user.id
