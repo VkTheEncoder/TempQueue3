@@ -124,8 +124,8 @@ async def handle_settings_cb(client: Client, cq):
     filters.text
     & ~filters.command(["start","softmux","hardmux","nosub","cancel","settings"])
     & check_user
-    & is_crf_stage  
-    & filters.private
+    & filters.private,
+    group=1
 )
 async def handle_crf_text(client: Client, message):
     """Catch CRF numeric entry."""
