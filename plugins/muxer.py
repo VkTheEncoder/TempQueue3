@@ -21,7 +21,7 @@ check_user = filters.create(_check_user)
 async def _ask_for_name(client, chat_id, mode, vid, sub, default_name):
     status = await client.send_message(
         chat_id,
-        "✍️ Send the output file name **with extension** (or type `default` to keep it):\n\n"
+        "✍️ Send the output file name <b>with extension</b> (or type <code>default</code> to keep it):\n\n"
         f"<code>{default_name}</code>",
         parse_mode=ParseMode.HTML
     )
@@ -154,6 +154,7 @@ async def queue_worker(client: Client):
             os.rename(src, dst)
 
             # upload with progress bar (= live)
+            t0 = time.time()
             await client.send_document(
                 job.chat_id,
                 document=dst,
@@ -182,7 +183,12 @@ async def queue_worker(client: Client):
 # ------------------------------------------------------------------------------
 # capture rename replies
 # ------------------------------------------------------------------------------
-@Client.on_message(filters.text & check_user & filters.private)
+@Client.on_message(
+    filters.text
+    & ~filters.command(["start","softmux","hardmux","nosub","cancel","settings"])
+    & check_user
+    & filters.private
+)
 async def maybe_capture_name(client, message):
     chat_id = message.from_user.id
     if chat_id not in _PENDING_RENAME:
