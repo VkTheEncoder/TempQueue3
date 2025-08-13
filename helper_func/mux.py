@@ -41,7 +41,9 @@ async def read_stderr(start: float, msg, proc, job_id: str):
             except:
                 pass
 
-async def softmux_vid(vid_filename: str, sub_filename: str, msg):
+async def softmux_vid(vid_path, sub_path, opts=None, msg=None):
+    if opts is None:
+        opts = dict(codec=Config.CODEC, crf=Config.CRF, preset=Config.PRESET)
     start    = time.time()
     vid_path = os.path.join(Config.DOWNLOAD_DIR, vid_filename)
     sub_path = os.path.join(Config.DOWNLOAD_DIR, sub_filename)
@@ -94,7 +96,10 @@ async def softmux_vid(vid_filename: str, sub_filename: str, msg):
         )
         return False
 
-async def hardmux_vid(input_path, sub_path, out_path, opts, msg=None):
+async def hardmux_vid(vid_path, sub_path, opts=None, msg=None):
+    # if no opts given, pull sensible defaults from Config
+    if opts is None:
+        opts = dict(codec=Config.CODEC, crf=Config.CRF, preset=Config.PRESET)
     start    = time.time()
     cfg      = SettingsManager.get(msg.chat.id)
 
@@ -159,7 +164,10 @@ async def hardmux_vid(input_path, sub_path, out_path, opts, msg=None):
         )
         return False
 
-async def nosub_encode(vid_filename: str, msg):
+async def nosub_encode(vid_path, opts=None, msg=None):
+    if opts is None:
+        opts = dict(codec=Config.CODEC, crf=Config.CRF, preset=Config.PRESET)
+        
     start    = time.time()
     cfg      = SettingsManager.get(msg.chat.id)
 
