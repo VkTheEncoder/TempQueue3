@@ -142,12 +142,12 @@ async def queue_worker(client: Client):
 
         # run ffmpeg (this will itself show live progress including job_id)
         if job.mode in ('soft', 'hard'):
-            # needs the subtitle path + the status message
             func = softmux_vid if job.mode == 'soft' else hardmux_vid
-            out_file = await func(job.vid, job.sub, job.status_msg)
+            # pass subtitle path and bind the status message by keyword
+            out_file = await func(job.vid, job.sub, msg=job.status_msg)
         else:
-            # nosub only needs the video + the status message
-            out_file = await nosub_encode(job.vid, job.status_msg)
+            # nosub encode only needs the video; again pass msg by keyword
+            out_file = await nosub_encode(job.vid, msg=job.status_msg)
 
         if out_file:
             # rename to the captured final_name
