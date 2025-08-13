@@ -123,7 +123,6 @@ async def read_stderr(start: float, msg, proc, job_id: str, total_dur: float, in
         card = (
             "📽️ <b>Encoding</b>\n\n"
             f"📊 <b>Size:</b> {_humanbytes(curr_size)}"
-            + (f" of {_humanbytes(input_size)}" if input_size else "") + "\n"
             f"⚡ <b>Speed:</b> {f'{speed_x:.2f}x' if speed_x else 'N/A'}\n"
             f"⏱️ <b>Time Elapsed:</b> {_fmt_time(elapsed)}\n"
             f"⏳ <b>ETA:</b> {_fmt_time(eta_sec)}\n"
