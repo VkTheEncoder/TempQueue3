@@ -94,7 +94,7 @@ async def softmux_vid(vid_filename: str, sub_filename: str, msg):
         )
         return False
 
-async def hardmux_vid(vid_filename: str, sub_filename: str, msg):
+async def hardmux_vid(input_path, sub_path, out_path, opts, msg=None):
     start    = time.time()
     cfg      = SettingsManager.get(msg.chat.id)
 
