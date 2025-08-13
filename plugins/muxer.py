@@ -3,31 +3,20 @@
 from pyrogram import Client, filters
 from pyrogram.enums import ParseMode
 from helper_func.queue import Job, job_queue
-from helper_func.mux   import softmux_vid, hardmux_vid, nosub_encode, running_jobs
+from helper_func.mux   import softmux_vid, hardmux_vid, running_jobs
 from helper_func.progress_bar import progress_bar
 from helper_func.dbhelper       import Database as Db
 from config import Config
 import uuid, time, os, asyncio
 
 db = Db()
-# Chat state: expecting a filename reply after picking a mode
-_PENDING_RENAME = {}  # chat_id -> dict(mode, vid, sub, default_name, status_msg)
 
 # only allow configured users
 async def _check_user(filt, client, message):
     return str(message.from_user.id) in Config.ALLOWED_USERS
 check_user = filters.create(_check_user)
 
-async def _ask_for_name(client, chat_id, mode, vid, sub, default_name):
-    status = await client.send_message(
-        chat_id,
-        "✍️ Send the output file name <b>with extension</b> (or type <code>default</code> to keep it):\n\n"
-        f"<code>{default_name}</code>",
-        parse_mode=ParseMode.HTML
-    )
-    _PENDING_RENAME[chat_id] = dict(
-        mode=mode, vid=vid, sub=sub, default_name=default_name, status_msg=status
-    )
+
 # ------------------------------------------------------------------------------
 # enqueue a soft-mux job
 # ------------------------------------------------------------------------------
@@ -42,9 +31,17 @@ async def enqueue_soft(client, message):
         if not sub: text += 'Send a Subtitle File!'
         return await client.send_message(chat_id, text, parse_mode=ParseMode.HTML)
 
+    # capture everything now
+    final_name = db.get_filename(chat_id)
+    job_id     = uuid.uuid4().hex[:8]
+    status     = await client.send_message(
+        chat_id,
+        f"🔄 Job <code>{job_id}</code> enqueued at position {job_queue.qsize() + 1}",
+        parse_mode=ParseMode.HTML
+    )
+
     # enqueue & clear DB so user can queue again immediately
-    default_final = db.get_filename(chat_id) or (os.path.splitext(vid)[0] + "_soft.mkv")
-    await _ask_for_name(client, chat_id, 'soft', vid, sub, default_final)
+    await job_queue.put(Job(job_id, 'soft', chat_id, vid, sub, final_name, status))
     db.erase(chat_id)
 
 
@@ -62,21 +59,16 @@ async def enqueue_hard(client, message):
         if not sub: text += 'Send a Subtitle File!'
         return await client.send_message(chat_id, text, parse_mode=ParseMode.HTML)
 
-    default_final = db.get_filename(chat_id) or (os.path.splitext(vid)[0] + "_hard.mp4")
-    await _ask_for_name(client, chat_id, 'hard', vid, sub, default_final)
+    final_name = db.get_filename(chat_id)
+    job_id     = uuid.uuid4().hex[:8]
+    status     = await client.send_message(
+        chat_id,
+        f"🔄 Job <code>{job_id}</code> enqueued at position {job_queue.qsize() + 1}",
+        parse_mode=ParseMode.HTML
+    )
+
+    await job_queue.put(Job(job_id, 'hard', chat_id, vid, sub, final_name, status))
     db.erase(chat_id)
-
-
-@Client.on_message(filters.command('nosub') & check_user & filters.private)
-async def enqueue_nosub(client, message):
-    chat_id = message.from_user.id
-    vid     = db.get_vid_filename(chat_id)
-    if not vid:
-        return await client.send_message(chat_id, "First send a Video File.", parse_mode=ParseMode.HTML)
-
-    # pick a sensible default name (use whatever you stored as original save_filename if present)
-    default_final = db.get_filename(chat_id) or (os.path.splitext(vid)[0] + "_nosub.mp4")
-    await _ask_for_name(client, chat_id, 'nosub', vid, None, default_final)
 
 
 # ------------------------------------------------------------------------------
@@ -119,7 +111,7 @@ async def cancel_job(client, message):
         )
 
     entry['proc'].kill()
-    for t in entry.get('tasks', []):
+    for t in entry['tasks']:
         t.cancel()
     running_jobs.pop(target, None)
 
@@ -140,14 +132,13 @@ async def queue_worker(client: Client):
             parse_mode=ParseMode.HTML
         )
 
-        # run ffmpeg (this will itself show live progress including job_id)
+        # Run ffmpeg and show live progress (message passed by keyword)
         if job.mode in ('soft', 'hard'):
             func = softmux_vid if job.mode == 'soft' else hardmux_vid
-            # pass subtitle path and bind the status message by keyword
             out_file = await func(job.vid, job.sub, msg=job.status_msg)
         else:
-            # nosub encode only needs the video; again pass msg by keyword
-            out_file = await nosub_encode(job.vid, msg=job.status_msg)
+            # If you add /nosub later, import nosub_encode and handle it here.
+            out_file = None
 
         if out_file:
             # rename to the captured final_name
@@ -157,17 +148,25 @@ async def queue_worker(client: Client):
 
             # upload with progress bar (= live)
             t0 = time.time()
-            await client.send_document(
-                job.chat_id,
-                document=dst,
-                caption=job.final_name,
-                progress=progress_bar,
-                progress_args=('Uploading…', job.status_msg, t0, job.job_id)
-            )
-    
+            if job.mode == 'soft':
+                await client.send_document(
+                    job.chat_id,
+                    document=dst,
+                    caption=job.final_name,
+                    progress=progress_bar,
+                    progress_args=('Uploading…', job.status_msg, t0, job.job_id)
+                )
+            else:
+                await client.send_video(
+                    job.chat_id,
+                    video=dst,
+                    caption=job.final_name,
+                    progress=progress_bar,
+                    progress_args=('Uploading…', job.status_msg, t0, job.job_id)
+                )
 
             await job.status_msg.edit(
-                f"✅ Job <code>{job.job_id}</code> done in {round(time.time() - t0)}s",
+                f"✅ Job <code>{job.job_id}</code> done.",
                 parse_mode=ParseMode.HTML
             )
 
@@ -180,51 +179,3 @@ async def queue_worker(client: Client):
 
         # signal done, move to next
         job_queue.task_done()
-
-
-# ------------------------------------------------------------------------------
-# capture rename replies
-# ------------------------------------------------------------------------------
-@Client.on_message(
-    filters.text
-    & ~filters.command(["start","softmux","hardmux","nosub","cancel","settings"])
-    & check_user
-    & filters.private
-)
-async def maybe_capture_name(client, message):
-    chat_id = message.from_user.id
-    if chat_id not in _PENDING_RENAME:
-        return  # ignore unrelated messages
-
-    pending = _PENDING_RENAME.pop(chat_id)
-    user_text = (message.text or '').strip()
-
-    final_name = pending['default_name']
-    if user_text and user_text.lower() not in ('default', '/skip'):
-        # ensure extension exists
-        root, ext = os.path.splitext(user_text)
-        if not ext:
-            # inherit ext from default
-            _, ext0 = os.path.splitext(final_name)
-            final_name = user_text + ext0
-        else:
-            final_name = user_text
-
-    # Create job
-    job_id = uuid.uuid4().hex[:8]
-    status = await client.send_message(
-        chat_id,
-        f"🔄 Job <code>{job_id}</code> enqueued at position {job_queue.qsize() + 1}",
-        parse_mode=ParseMode.HTML
-    )
-
-    await job_queue.put(Job(
-        job_id,
-        pending['mode'],
-        chat_id,
-        pending['vid'],
-        pending['sub'],
-        final_name,
-        status
-    ))
-    db.erase(chat_id)
