@@ -5,7 +5,9 @@ from pyrogram.enums import ParseMode
 
 running_jobs: dict[str, dict] = {}
 
-progress_pattern = re.compile(r'(frame|fps|size|time|bitrate|speed)\s*=\s*(\S+)')
+progress_pattern = re.compile(
+    r'(frame|fps|size|time|bitrate|speed|total_size|out_time_ms|progress)\s*=\s*(\S+)'
+)
 def parse_progress(line: str):
     items = {k: v for k, v in progress_pattern.findall(line)}
     return items or None
