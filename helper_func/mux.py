@@ -52,6 +52,8 @@ async def softmux_vid(vid_filename: str, sub_filename: str, msg):
 
     proc = await asyncio.create_subprocess_exec(
         'ffmpeg', '-hide_banner',
+        # force progress output
+        '-progress', 'pipe:2', '-nostats',
         '-i', vid_path, '-i', sub_path,
         '-map', '1:0', '-map', '0',
         '-disposition:s:0', 'default',
@@ -114,13 +116,13 @@ async def hardmux_vid(vid_filename: str, sub_filename: str, msg):
     out_path = os.path.join(Config.DOWNLOAD_DIR, output)
 
     proc = await asyncio.create_subprocess_exec(
-        'ffmpeg','-hide_banner',
+        'ffmpeg', '-hide_banner',
+        # force progress output
+        '-progress', 'pipe:2', '-nostats',
         '-i', vid_path,
         '-vf', vf_arg,
-        '-c:v', codec,
-        '-preset', preset,
-        '-crf', crf,
-        '-map','0:v:0','-map','0:a:0?',
+        '-c:v', codec, '-preset', preset, '-crf', crf,
+        '-map','0:v:0','-map','0:a:0?',    # keep your mapping
         '-c:a','copy',
         '-y', out_path,
         stdout=asyncio.subprocess.PIPE,
@@ -181,8 +183,10 @@ async def nosub_encode(vid_filename: str, msg):
     out_path = os.path.join(Config.DOWNLOAD_DIR, output)
 
     proc = await asyncio.create_subprocess_exec(
-        'ffmpeg','-hide_banner',
-        '-i', vid_path, *vf_args,
+        'ffmpeg', '-hide_banner',
+        '-progress', 'pipe:2', '-nostats',
+        '-i', vid_path,
+        *vf_args,                              # whatever you already pass (scale/fps if any)
         '-c:v', codec, '-preset', preset, '-crf', crf,
         '-c:a', 'copy',
         '-y', out_path,
