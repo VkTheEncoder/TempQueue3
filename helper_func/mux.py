@@ -89,12 +89,14 @@ async def read_stderr(start: float, msg, proc, job_id: str, total_dur: float, in
         if not prog:
             continue
 
+        # Pull fields
         if 'out_time_ms' in prog:
             try:
                 curr_time = int(prog['out_time_ms']) / 1_000_000.0
             except Exception:
                 pass
         elif 'time' in prog:
+            # fallback: 00:00:12.34 -> seconds
             t = prog['time']
             try:
                 h, m, s = t.split(':')
@@ -115,16 +117,19 @@ async def read_stderr(start: float, msg, proc, job_id: str, total_dur: float, in
                 pass
 
         if 'speed' in prog and prog['speed'] not in ('N/A', '0x'):
+            # '1.23x'
             try:
                 speed_x = float(prog['speed'].rstrip('x'))
             except Exception:
                 speed_x = 0.0
 
+        # Throttle UI updates (~once every 2s)
         now = time.time()
         if now - last_edit < 5:
             continue
         last_edit = now
 
+        # Percent and ETA
         pct = 0.0
         eta_sec = 0
         if total_dur > 0:
@@ -132,6 +137,7 @@ async def read_stderr(start: float, msg, proc, job_id: str, total_dur: float, in
             if speed_x > 0:
                 eta_sec = max(0, int((total_dur - curr_time) / speed_x))
             elif curr_time > 0:
+                # fallback ETA from avg processing rate
                 speed_factor = curr_time / (now - start)  # (sec encoded) per wall sec
                 if speed_factor > 0:
                     eta_sec = max(0, int((total_dur - curr_time) / speed_factor))
@@ -148,10 +154,10 @@ async def read_stderr(start: float, msg, proc, job_id: str, total_dur: float, in
             f"⏳ <b>ETA:</b> {_fmt_time(eta_sec)}\n"
         )
         try:
-            from pyrogram.enums import ParseMode as _PM
-            await msg.edit(card, parse_mode=_PM.HTML)
+            await msg.edit(card, parse_mode=ParseMode.HTML)
         except:
             pass
+
 
 # ============ SOFT-MUX ============
 
@@ -210,11 +216,11 @@ async def softmux_vid(vid_filename: str, sub_filename: str, msg):
         )
         return False
 
+
 # ============ HARD-MUX ============
 
 async def hardmux_vid(vid_filename: str, sub_filename: str, msg):
     start    = time.time()
-    from helper_func.settings_manager import SettingsManager
     cfg      = SettingsManager.get(msg.chat.id)
 
     res    = cfg.get('resolution','1920:1080')
@@ -283,11 +289,11 @@ async def hardmux_vid(vid_filename: str, sub_filename: str, msg):
         )
         return False
 
+
 # ============ NO-SUB (encode only) ============
 
 async def nosub_encode(vid_filename: str, msg):
     start    = time.time()
-    from helper_func.settings_manager import SettingsManager
     cfg      = SettingsManager.get(msg.chat.id)
 
     res    = cfg.get('resolution','1920:1080')
