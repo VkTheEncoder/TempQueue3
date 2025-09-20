@@ -244,13 +244,22 @@ async def save_url(client, message):
     except:
         pass
 
-    db.put_video(chat_id, filename, save_filename)
-    if db.check_sub(chat_id) :
-        text = 'Video File Downloaded.\nChoose : [ /softmux , /hardmux , /nosub ]'
-    else :
-        text = ('Video file downloaded successfully.\n'
-                'Choose[ /softmux , /hardmux , /nosub ].')
-    try:
-        await sent_msg.edit(text)
+  db.put_video(chat_id, filename, save_filename)
+  
+  if db.check_sub(chat_id):
+      # BOTH video & subtitle are ready → ask for rename instead of mux choices
+      # derive a decent default stub (without extension)
+      base_stub = os.path.splitext(filename)[0][:60]
+      try:
+          await sent_msg.edit("Video file downloaded successfully.")
+      except:
+          pass
+      await prompt_rename(client, chat_id, base_stub)
+  else:
+      # only video is ready; wait for subtitle
+      try:
+          await sent_msg.edit("✅ Video saved. Now send the subtitle file (srt/ass).")
+      except:
+          pass
     except:
         pass
