@@ -57,12 +57,11 @@ async def skip_rename(client: Client, message):
 @Client.on_message(filters.text & filters.private)
 async def handle_rename_text(client: Client, message):
     uid = message.from_user.id
-    # 1) Always let slash-commands pass through to other handlers (e.g., /settings).
-    #    This is the key fix so your /settings keeps working.
+
+    # Let slash commands (e.g., /settings) pass to their own handlers.
     if (message.text or "").lstrip().startswith("/"):
         return
 
-    # 2) Only process when we're actually waiting for a rename from this user.
     if not _allowed_user(uid) or uid not in RENAMING:
         return
 
@@ -73,7 +72,6 @@ async def handle_rename_text(client: Client, message):
             parse_mode=ParseMode.HTML
         )
 
-    # Save only the stub; the final extension is applied after encode/mux.
     db.set_filename(uid, new_stub)
     RENAMING.discard(uid)
     await message.reply(
