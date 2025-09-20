@@ -6,7 +6,7 @@ from pyrogram.enums import ParseMode
 from helper_func.settings_manager import SettingsManager
 from config import Config
 
-# in‑memory state for who’s currently in settings
+# in-memory state for who’s currently in settings
 _PENDING = {}
 
 # Option lists
@@ -57,10 +57,18 @@ def _keyboard(options: list, tag: str) -> InlineKeyboardMarkup:
          for n, v in options]
     )
 
-@Client.on_message(filters.command("settings") & filters.private)
+@Client.on_message(filters.command("settings") & filters.private & check_user)
 async def start_settings(client: Client, message):
     """Entry point: choose resolution."""
     uid = message.from_user.id
+
+    # IMPORTANT: cancel any pending rename flow for this user so CRF input won't be eaten.
+    try:
+        from plugins.rename import RENAMING
+        RENAMING.discard(uid)
+    except Exception:
+        pass
+
     _PENDING[uid] = 'res'
     await message.reply(
         "<b>🔧 Settings</b>\nChoose your target resolution:",
@@ -68,15 +76,19 @@ async def start_settings(client: Client, message):
         parse_mode=ParseMode.HTML
     )
 
-@Client.on_callback_query()
+@Client.on_callback_query(check_user)
 async def handle_settings_cb(client: Client, cq):
     """Handle each button press."""
     uid = cq.from_user.id
     stage = _PENDING.get(uid)
     if not stage:
-        return  # not in settings flow
+        # Ignore callbacks if the user isn't in a settings flow.
+        return
 
-    action, val = cq.data.split('*', 1)
+    data = cq.data or ""
+    if "*" not in data:
+        return await cq.answer("Invalid action.", show_alert=False)
+    action, val = data.split('*', 1)
     await cq.answer()
 
     if action == 'res':
@@ -119,7 +131,6 @@ async def handle_settings_cb(client: Client, cq):
         _PENDING.pop(uid, None)
         await cq.edit_message_text(summary, parse_mode=ParseMode.HTML)
 
-
 @Client.on_message(
     filters.text
     & ~filters.command(["start","softmux","hardmux","nosub","cancel","settings"])
@@ -133,7 +144,7 @@ async def handle_crf_text(client: Client, message):
     if _PENDING.get(uid) != 'crf':
         return
 
-    txt = message.text.strip()
+    txt = (message.text or "").strip()
     if not txt.isdigit() or not (0 <= int(txt) <= 51):
         return await message.reply(
             "❌ Please enter a number between 0 and 51."
