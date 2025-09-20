@@ -213,13 +213,14 @@ async def save_url(client, message):
     except:
         pass
 
+    # Save the video record
     db.put_video(chat_id, filename, save_filename)
 
-    # If sub already present → ask rename; else ask for subtitle
+    # If subtitle already exists, prompt rename; else ask for subtitle
     if db.check_sub(chat_id):
-        # Suggest a stub based on the original filename (without extension)
-        base_stub = os.path.splitext(save_filename)[0][:60]
+        # Lazy import to avoid circulars
         from plugins.rename import prompt_rename
+        base_stub = os.path.splitext(save_filename)[0][:60]
         await prompt_rename(client, chat_id, base_stub)
     else:
         try:
