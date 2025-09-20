@@ -159,10 +159,9 @@ async def save_url(client, message):
     chat_id = message.from_user.id
     save_filename = None
 
-    if "|" in message.text:
-        if len(message.text.split('|')) == 2:
-            save_filename = message.text.split('|')[1].strip()
-            url = message.text.split('|')[0].strip()
+    if "|" in message.text and len(message.text.split('|')) == 2:
+        save_filename = message.text.split('|')[1].strip()
+        url = message.text.split('|')[0].strip()
     else:
         url = message.text.strip()
 
@@ -171,11 +170,10 @@ async def save_url(client, message):
 
     r = requests.get(url, stream=True, allow_redirects=True)
     if save_filename is None:
-        if 'content-disposition' in r.headers.keys():
-            regx = 'filename="(.*?)"'
-            res = re.search(regx, str(r.headers))
-            if res:
-                save_filename = res.group(1)
+        if 'content-disposition' in r.headers:
+            m = re.search(r'filename="(.*?)"', str(r.headers))
+            if m:
+                save_filename = m.group(1)
             else:
                 if '?' in url:
                     url = ''.join(url.split('?')[0:-1])
@@ -190,17 +188,13 @@ async def save_url(client, message):
     if ext not in ['mp4', 'mkv']:
         return await sent_msg.edit(Chat.UNSUPPORTED_FORMAT.format(ext))
 
-    size = None
-    if 'content-length' in r.headers.keys():
-        size = int(r.headers['content-length'])
-
+    size = int(r.headers.get('content-length', 0))
     if not size:
         return await sent_msg.edit(Chat.FILE_SIZE_ERROR)
     if size > (2 * 1000 * 1000 * 1000):
         return await sent_msg.edit(Chat.MAX_FILE_SIZE)
 
-    if not os.path.exists(Config.DOWNLOAD_DIR):
-        os.mkdir(Config.DOWNLOAD_DIR)
+    os.makedirs(Config.DOWNLOAD_DIR, exist_ok=True)
 
     current = 0
     start = time.time()
@@ -208,20 +202,25 @@ async def save_url(client, message):
 
     with requests.get(url, stream=True, allow_redirects=True) as r2:
         with open(os.path.join(Config.DOWNLOAD_DIR, filename), 'wb') as f:
-            for chunk in r2.iter_content(chunk_size=1024*1024):
+            for chunk in r2.iter_content(chunk_size=1024 * 1024):
                 if chunk:
                     written = f.write(chunk)
                     current += written
                     await progress_bar(current, size, 'Downloading Your File!', sent_msg, start)
 
     try:
-        await sent_msg.edit(Chat.DOWNLOAD_SUCCESS.format(round(time.time()-start)))
+        await sent_msg.edit(Chat.DOWNLOAD_SUCCESS.format(round(time.time() - start)))
     except:
         pass
 
     db.put_video(chat_id, filename, save_filename)
+
+    # If sub already present → ask rename; else ask for subtitle
     if db.check_sub(chat_id):
-        await prompt_rename(client, chat_id, _base_stub(save_filename))
+        # Suggest a stub based on the original filename (without extension)
+        base_stub = os.path.splitext(save_filename)[0][:60]
+        from plugins.rename import prompt_rename
+        await prompt_rename(client, chat_id, base_stub)
     else:
         try:
             await sent_msg.edit("✅ Video saved. Now send the subtitle file (srt/ass).")
